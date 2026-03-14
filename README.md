@@ -99,3 +99,4 @@ VoteChain/
 ## 📄 License
 
 This project is licensed under the **MIT License**.
+# VoteChain-Hackathon-Project2

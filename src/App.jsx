@@ -1,11 +1,13 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { Vote, Wallet, LogOut, CheckCircle, AlertCircle, Bell, X, User, Shield, Home } from 'lucide-react';
+import axios from 'axios';
 import { CONTRACT_ABI } from './utils/ABI';
 import AdminDashboard from './components/AdminDashboard';
 import VoterDashboard from './components/VoterDashboard';
 import Notification from './components/Notification';
 import NotificationPanel from './components/NotificationPanel';
+import FaceAuth from './components/FaceAuth';
 
 // Deployed Contract Address
 const CONTRACT_ADDRESS = "0x219b1E30823236b188f38E933A3fad90E79C0883";
@@ -33,6 +35,12 @@ const Web3Provider = ({ children }) => {
   const [contract, setContract] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+
+  // New Auth State
+  const [isFaceVerified, setIsFaceVerified] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [history, setHistory] = useState(() => {
@@ -95,7 +103,24 @@ const Web3Provider = ({ children }) => {
 
       setAccount(acc);
       setIsConnected(true);
-      addNotification("Wallet Verified", "success");
+      addNotification("Wallet Verified. Checking registration...", "info");
+
+      // Check backend for user registration status
+      try {
+        const res = await axios.get(`http://localhost:5000/api/users/${acc}`);
+        if (res.data.success) {
+          setIsRegistered(true);
+          setUserProfile(res.data.user);
+        }
+      } catch (err) {
+        if (err.response && err.response.status === 404) {
+          setIsRegistered(false);
+          setUserProfile(null);
+        } else {
+          console.error("Backend error", err);
+          addNotification("Could not communicate with backend database", "warning");
+        }
+      }
 
       // Check Admin Status
       const contractInstance = await getContract(signer);
@@ -106,7 +131,6 @@ const Web3Provider = ({ children }) => {
           const adminAddress = await contractInstance.admin();
           if (adminAddress.toLowerCase() === acc.toLowerCase()) {
             setIsAdmin(true);
-            addNotification("Welcome Admin", "success");
           }
         } catch (e) {
           console.error("Failed to fetch admin", e);
@@ -126,15 +150,28 @@ const Web3Provider = ({ children }) => {
     setIsConnected(false);
     setIsAdmin(false);
     setContract(null);
+    setIsFaceVerified(false);
+    setIsRegistered(false);
+    setUserProfile(null);
     addNotification("Wallet Disconnected", "info");
+  };
+
+  const handleFaceVerification = (user) => {
+    setIsFaceVerified(true);
+    setUserProfile(user);
+    setIsRegistered(true);
   };
 
   return (
     <Web3Context.Provider value={{
       account, isAdmin, isConnected, contract,
       connectWallet, disconnectWallet,
-      notifications: toasts, // For Notification Toast Component
-      history, isPanelOpen, togglePanel, // For Notification Panel
+      isFaceVerified, setIsFaceVerified,
+      isRegistered, setIsRegistered,
+      userProfile, setUserProfile,
+      handleFaceVerification,
+      notifications: toasts,
+      history, isPanelOpen, togglePanel,
       addNotification, markAsRead, markAllAsRead, removeNotification, clearHistory,
       loading, ethers
     }}>
@@ -150,7 +187,7 @@ export const useWeb3 = () => useContext(Web3Context);
 // --- Main Layout Components ---
 
 const Navbar = () => {
-  const { account, isConnected, isAdmin, connectWallet, disconnectWallet, history, togglePanel } = useWeb3();
+  const { account, isConnected, isFaceVerified, isAdmin, userProfile, connectWallet, disconnectWallet, history, togglePanel } = useWeb3();
   const { navigate } = useRouter();
 
   return (
@@ -168,20 +205,24 @@ const Navbar = () => {
         <div className="flex items-center space-x-4">
           {isConnected ? (
             <>
-              {isAdmin ? (
-                <button
-                  onClick={() => navigate('admin')}
-                  className="px-4 py-2 text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors"
-                >
-                  Admin Dashboard
-                </button>
-              ) : (
-                <button
-                  onClick={() => navigate('voter')}
-                  className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  Voter Dashboard
-                </button>
+              {isFaceVerified && (
+                <>
+                  {isAdmin ? (
+                    <button
+                      onClick={() => navigate('admin')}
+                      className="px-4 py-2 text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors"
+                    >
+                      Admin Dashboard
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('voter')}
+                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                      Voter Dashboard
+                    </button>
+                  )}
+                </>
               )}
 
               {/* Notification Bell */}
@@ -196,7 +237,13 @@ const Navbar = () => {
               </button>
 
               <div className="flex items-center space-x-2 bg-gray-800/50 px-3 py-1.5 rounded-full border border-gray-700">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                {userProfile && userProfile.name && (
+                  <div className="flex items-center mr-2 pr-2 border-r border-gray-600">
+                    <User className="w-4 h-4 text-blue-400 mr-1" />
+                    <span className="text-sm font-medium text-gray-200">{userProfile.name}</span>
+                  </div>
+                )}
+                <div className={`w-2 h-2 rounded-full animate-pulse ${isFaceVerified ? 'bg-green-500' : 'bg-yellow-500'}`} />
                 <span className="text-sm text-gray-300 font-mono">
                   {account.substring(0, 6)}...{account.slice(-4)}
                 </span>
@@ -221,7 +268,7 @@ const Navbar = () => {
 };
 
 const HomePage = () => {
-  const { isConnected, isAdmin } = useWeb3();
+  const { isConnected, isFaceVerified, isAdmin } = useWeb3();
   const { navigate } = useRouter();
 
   return (
@@ -233,7 +280,7 @@ const HomePage = () => {
       <div className="relative z-10 text-center max-w-4xl space-y-8 animate-in slide-in-from-bottom duration-700 fade-in">
         <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-4">
           <Shield className="w-4 h-4" />
-          <span className="text-sm font-medium">Secure Blockchain Voting System</span>
+          <span className="text-sm font-medium">Secure Face-Verified Blockchain Voting System</span>
         </div>
 
         <h1 className="text-6xl md:text-7xl font-bold tracking-tight">
@@ -244,17 +291,23 @@ const HomePage = () => {
         </h1>
 
         <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
-          Experience the next generation of electoral integrity. Decentralized, transparent, and immutable voting powered by Ethereum smart contracts.
+          Experience the next generation of electoral integrity. Identity verified by face recognition, voting powered by Ethereum smart contracts.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
           {isConnected ? (
-            <button
-              onClick={() => navigate(isAdmin ? 'admin' : 'voter')}
-              className="px-8 py-4 bg-white text-black rounded-xl font-bold hover:bg-gray-100 transition-colors flex items-center space-x-2"
-            >
-              <span>Go to Dashboard</span>
-            </button>
+            isFaceVerified ? (
+              <button
+                onClick={() => navigate(isAdmin ? 'admin' : 'voter')}
+                className="px-8 py-4 bg-white text-black rounded-xl font-bold hover:bg-gray-100 transition-colors flex items-center space-x-2"
+              >
+                <span>Go to Dashboard</span>
+              </button>
+            ) : (
+              <div className="text-yellow-400 mb-8 font-medium bg-yellow-400/10 px-4 py-2 rounded-lg border border-yellow-400/20">
+                Please verify your face to access the dashboard.
+              </div>
+            )
           ) : (
             <div className="text-gray-500 mb-8 italic">
               Connect your wallet to get started
@@ -266,8 +319,8 @@ const HomePage = () => {
       {/* Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-24 max-w-6xl w-full px-4 text-left">
         {[
+          { title: "Dual Security", desc: "Requires both Web3 Wallet and Biometric Face Verification for entry.", icon: User },
           { title: "Immutable Records", desc: "Every vote is recorded permanently on the blockchain, ensuring 100% data integrity.", icon: Shield },
-          { title: "Time-Bound Voting", desc: "Smart contracts enforce strict start and end times for fair election cycles.", icon: Vote },
           { title: "Transparency", desc: "Results are verifiable by anyone, but only released after the election ends.", icon: CheckCircle },
         ].map((feature, i) => (
           <div key={i} className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/30 transition-colors">
@@ -303,6 +356,23 @@ function App() {
 // Separate component to consume router context
 const MainContent = () => {
   const { currentPage } = useRouter();
+  const { isConnected, isFaceVerified, isRegistered, account, addNotification, handleFaceVerification } = useWeb3();
+
+  // If connected but not verified, force Face Verification
+  if (isConnected && !isFaceVerified) {
+    return (
+      <div className="pt-16 min-h-screen bg-[#0f172a] text-white flex items-center justify-center pb-20">
+        <FaceAuth
+          account={account}
+          isRegistration={!isRegistered}
+          onVerified={(user) => {
+            handleFaceVerification(user);
+          }}
+          addNotification={addNotification}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="pt-16">
