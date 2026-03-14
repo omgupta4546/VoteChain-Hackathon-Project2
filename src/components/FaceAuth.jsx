@@ -3,7 +3,11 @@ import * as faceapi from 'face-api.js';
 import { Camera, CheckCircle, XCircle, Loader2, User, Mail, Hash } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Fix: Ensure Vercel environment variables that lack /api append it automatically 
+if (API_URL && !API_URL.endsWith('/api')) {
+    API_URL += '/api';
+}
 
 const FaceAuth = ({ account, isRegistration, onVerified, addNotification }) => {
     const videoRef = useRef();

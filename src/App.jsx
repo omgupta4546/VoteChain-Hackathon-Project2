@@ -107,7 +107,11 @@ const Web3Provider = ({ children }) => {
 
       // Check backend for user registration status
       try {
-        const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/${acc}`);
+        let apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        if (apiUrl && !apiUrl.endsWith('/api')) {
+            apiUrl += '/api';
+        }
+        const res = await axios.get(`${apiUrl}/users/${acc}`);
         if (res.data.success) {
           setIsRegistered(true);
           setUserProfile(res.data.user);
