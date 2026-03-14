@@ -32,7 +32,7 @@ const FaceAuth = ({ account, isRegistration, onVerified, addNotification }) => {
         const loadModels = async () => {
             try {
                 await Promise.all([
-                    faceapi.nets.ssdMobilenetv1.loadFromUri('/models'),
+                    faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
                     faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
                     faceapi.nets.faceRecognitionNet.loadFromUri('/models')
                 ]);
@@ -87,7 +87,7 @@ const FaceAuth = ({ account, isRegistration, onVerified, addNotification }) => {
         try {
             const detection = await faceapi.detectSingleFace(
                 videoRef.current,
-                new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })
+                new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 })
             ).withFaceLandmarks().withFaceDescriptor();
 
             if (!detection) {
