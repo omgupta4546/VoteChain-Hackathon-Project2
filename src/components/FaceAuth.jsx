@@ -3,7 +3,7 @@ import * as faceapi from 'face-api.js';
 import { Camera, CheckCircle, XCircle, Loader2, User, Mail, Hash } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const FaceAuth = ({ account, isRegistration, onVerified, addNotification }) => {
     const videoRef = useRef();
